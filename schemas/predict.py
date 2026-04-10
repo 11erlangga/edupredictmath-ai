@@ -15,16 +15,22 @@ class Interaction(BaseModel):
         return v
 
 
+class Preferences(BaseModel):
+    interest: str
+
+
 class PredictRequest(BaseModel):
-    history: list[Interaction]
+    user_id: str
+    preferences: Preferences
+    history: list[Interaction]  # boleh kosong untuk user baru
     query_concept: int
 
-    @field_validator("history")
-    @classmethod
-    def history_must_not_be_empty(cls, v):
-        if len(v) == 0:
-            raise ValueError("history tidak boleh kosong")
-        return v
+    # @field_validator("history")
+    # @classmethod
+    # def history_must_not_be_empty(cls, v):
+    #     if len(v) == 0:
+    #         raise ValueError("history tidak boleh kosong")
+    #     return v
 
     @field_validator("query_concept")
     @classmethod
@@ -36,7 +42,25 @@ class PredictRequest(BaseModel):
         return v
 
 
-class PredictResponse(BaseModel):
-    query_concept: int
+class InterventionResponse(BaseModel):
+    type: str  # "explanation" atau "hint"
+
+
+class PredictData(BaseModel):
     probability: float
-    intervention_level: str
+    mastery_level: str  # "low", "medium", "high", "unknown"
+    action: str  # "explain", "hint", "next"
+    next_step: str  # "review", "retry", "continue", "assess"
+    concept_id: int
+    intervention: InterventionResponse | None = None
+
+
+class MetaResponse(BaseModel):
+    model_version: str
+    generated_at: str
+
+
+class PredictResponse(BaseModel):
+    status: str
+    data: PredictData
+    meta: MetaResponse
