@@ -1,0 +1,55 @@
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# ===========================
+# Virtual Environment
+# ===========================
+venv/
+.venv/
+env/
+
+# Conda
+conda-env/
+envs/
+*.conda
+
+# ===========================
+# Environment Variables
+# ===========================
+.env
+.env.*
+
+# ===========================
+# Jupyter Notebook
+# ===========================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===========================
+# Model & Data
+# ===========================
+ai-service/saved_model/
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+*.h5
+*.pb
+*.pt
+*.pth
+*.ckpt
+
+# ===========================
+# OS
+# ===========================
+.DS_Store
+Thumbs.db
