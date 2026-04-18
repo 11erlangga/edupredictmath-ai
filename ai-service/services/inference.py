@@ -1,42 +1,66 @@
 from datetime import datetime, timezone
 
 from schemas.predict import (
+    Action,
     InterventionResponse,
+    InterventionType,
+    MasteryLevel,
     MetaResponse,
+    NextStep,
     PredictData,
     PredictRequest,
     PredictResponse,
 )
+from services.gemini import generate_intervention_text
 
 MODEL_VERSION = "dkt_v1"
 
+# Threshold penguasaan konsep — masih menunggu keputusan DS untuk nilai yang fixed
+THRESHOLD_LOW = 0.4
+THRESHOLD_MEDIUM = 0.7
 
-def get_mastery_and_action(probability: float, no_history: bool):
-    if no_history:
-        return "unknown", "next", "assess", None
 
-    if probability < 0.4:  # tunggu keputusan tim ds buat threshold yang fixed
-        return "low", "explain", "review", InterventionResponse(type="explanation")
-    elif probability < 0.7:  # tunggu keputusan tim ds buat threshold yang fixed
-        return "medium", "hint", "retry", InterventionResponse(type="hint")
+def get_mastery_and_action(
+    probability: float,
+) -> tuple[MasteryLevel, Action, NextStep, InterventionResponse | None]:
+    if probability < THRESHOLD_LOW:
+        return (
+            MasteryLevel.low,
+            Action.explain,
+            NextStep.review,
+            InterventionResponse(type=InterventionType.explanation),
+        )
+    elif probability < THRESHOLD_MEDIUM:
+        return (
+            MasteryLevel.medium,
+            Action.hint,
+            NextStep.retry,
+            InterventionResponse(type=InterventionType.hint),
+        )
     else:
-        return "high", "next", "continue", None
+        return (
+            MasteryLevel.high,
+            Action.next,
+            NextStep.continue_,
+            None,
+        )
 
 
 def predict_knowledge(request: PredictRequest) -> PredictResponse:
-    no_history = len(request.history) == 0
+    # Dummy inference — nanti diganti model yang sudah di-train
+    total = len(request.history)
+    correct = sum([i.correctness for i in request.history])
+    probability = correct / total
 
-    if no_history:
-        probability = 0.5
-    else:
-        # Dummy inference — nanti diganti model DKT asli
-        total = len(request.history)
-        correct = sum([i.correctness for i in request.history])
-        probability = correct / total
+    mastery_level, action, next_step, intervention = get_mastery_and_action(probability)
 
-    mastery_level, action, next_step, intervention = get_mastery_and_action(
-        probability, no_history
-    )
+    # Generate teks intervensi kalau mastery low/medium
+    if intervention is not None:
+        intervention.text = generate_intervention_text(
+            intervention_type=intervention.type.value,
+            concept_id=request.query_concept,
+            interest=request.preferences.interest,
+        )
 
     return PredictResponse(
         status="success",

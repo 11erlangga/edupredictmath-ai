@@ -2,17 +2,24 @@
 
 # import tensorflow as tf
 from fastapi import FastAPI
-
 from routers import predict
 
-app = FastAPI()
+app = FastAPI(
+    title="EduPredictMath AI Service",
+    description="API untuk prediksi penguasaan konsep matematika siswa menggunakan model Knowledge Tracing.",
+    version="1.0.0",
+)
 
 app.include_router(predict.router)
 
 
 @app.get("/")
 def root():
-    return {"message": "AI Service is running"}
+    return {
+        "message": "EduPredictMath AI Service is running",
+        "version": "1.0.0",
+        "docs": "/docs",
+    }
 
 
 # @asynccontextmanager
