@@ -61,7 +61,7 @@ edupredictmath-ai/
 
 #### 1. Clone repositori
 ```bash
-git clone https://github.com/timkamu/edupredictmath-ai.git
+git clone https://github.com/11erlangga/edupredictmath-ai.git
 cd edupredictmath-ai
 ```
 
@@ -190,7 +190,7 @@ edupredictmath-ai/
 
 #### 1. Clone the repository
 ```bash
-git clone https://github.com/yourteam/edupredictmath-ai.git
+git clone https://github.com/11erlangga/edupredictmath-ai.git
 cd edupredictmath-ai
 ```
 
