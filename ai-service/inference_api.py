@@ -13,6 +13,7 @@ hints using Google Gemini based on student preference.
 import os
 import json
 import math
+import time
 import logging
 from typing import Optional, List, Dict, Any
 
@@ -48,14 +49,17 @@ if MODEL_TYPE == "LSTM":
     VOCAB_PATH = "final/lstm_dkt_model_train/vocab.json"
     MAX_SEQ_LEN = 100
 elif MODEL_TYPE == "Transformer":
-    MODEL_PATH = "final/causal_cross_transformer_dkt_model_train/causal_cross_transformer_dkt_model.keras"
-    VOCAB_PATH = "final/causal_cross_transformer_dkt_model_train/vocab.json"
+    MODEL_PATH = "final/causal_cross_transformer_dkt_model/causal_cross_transformer_dkt_model.keras"
+    VOCAB_PATH = "final/causal_cross_transformer_dkt_model/vocab.json"
     MAX_SEQ_LEN = 100
 else:
     raise ValueError(f"Unknown MODEL_TYPE: {MODEL_TYPE}")
 
 TOP_CATEGORY_PATH = "top_category.json"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+# Lazily initialized Google GenAI client (new SDK)
+_genai_client = None
 
 # ──────────────────────────────────────────────────────────────
 # Keras Custom Layers Definition
@@ -654,34 +658,43 @@ def trigger_gemini_explanation(skills: List[str], preference: str, question: Opt
         "The response MUST focus heavily on solving this specific question step-by-step "
         f"using their hobby (\"{preference}\") as a creative analogy, theme, or context to make it highly engaging and easy to understand. "
         "If the question requires step-by-step mathematical problem solving, show the clear step-by-step calculations. "
-        "Keep the overall response extremely concise and strictly under 10 lines total."
+        "Keep the overall response extremely concise and strictly under 10 lines total. "
+        "CRITICAL FORMATTING RULE: Format the output strictly using RAW HTML tags (e.g., <em>, <b>, <br>) instead of Markdown. DO NOT escape the tags into HTML entities (e.g., never use &lt; or &gt;). You must output the literal < and > characters for your tags."
     )
     
     logger.info(f"[Gemini Prompt]\n{prompt}")
     
     if not GEMINI_API_KEY:
         placeholder = (
-            f"[Gemini API key not configured] "
-            f"Keep practicing! Revisit the core rules of {', '.join(skills)}. "
-            f"Try taking it step by step — you are fully capable of masteries like this!"
+            f"Terus berlatih, ya! Coba ulangi konsep inti tentang {', '.join(skills)}. "
+            f"Kerjakan pelan-pelan langkah demi langkah — kamu pasti bisa!"
         )
         logger.warning("GEMINI_API_KEY is not set. Returning offline placeholder.")
         return placeholder
         
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        global _genai_client
+        if _genai_client is None:
+            from google import genai
+            _genai_client = genai.Client(api_key=GEMINI_API_KEY)
+
+        time_start = time.perf_counter()
+        response = _genai_client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=prompt,
+        )
+        time_end = time.perf_counter()
+        latency_ms = (time_end - time_start) * 1000.0
+        logger.info(f"[Gemini Latency] models.generate_content took {latency_ms:.0f}ms")
+
+        text = (getattr(response, "text", "") or "").strip()
         logger.info(f"[Gemini Response]\n{text}")
         return text
     except Exception as e:
         logger.error(f"Error calling Gemini: {e}")
         fallback = (
-            f"[Gemini API connection error] "
-            f"Review the key rules for {', '.join(skills)}. "
-            f"Draw a picture or break it down into simple equations — you've got this!"
+            f"Coba tinjau lagi aturan/konsep utama untuk {', '.join(skills)}. "
+            f"Buat gambar atau pecah menjadi persamaan sederhana — kamu pasti bisa!"
         )
         return fallback
 

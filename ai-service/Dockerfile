@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pydantic \
     numpy \
     tensorflow-cpu \
-    google-generativeai
+    google-genai
 
 # Copy application files
 COPY inference_api.py .
