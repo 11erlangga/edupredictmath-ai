@@ -22,6 +22,11 @@ conda-env/
 envs/
 *.conda
 
+# uv
+.python-version
+pyproject.toml
+uv.lock
+
 # ===========================
 # Environment Variables
 # ===========================

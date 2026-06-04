@@ -8,78 +8,87 @@
 
 Repositori ini berisi **AI Service** dari project EduPredictMath — bagian yang bertanggung jawab atas prediksi penguasaan konsep matematika siswa menggunakan model Knowledge Tracing.
 
+Service utama ada di folder `ai-service/` dan menyediakan endpoint **POST** `/predict` untuk:
+- menjalankan inference model DKT (LSTM atau Causal Cross-Transformer),
+- menghitung agregasi mastery pada 6 top kategori matematika,
+- (opsional) memicu hint step-by-step Bahasa Indonesia yang dipersonalisasi menggunakan Google Gemini bila siswa terdeteksi “struggling”.
+
 ### 📁 Struktur Repositori
 
-```
+```text
 edupredictmath-ai/
-├── ai-service/                        # API yang di-deploy ke Railway
-│   ├── main.py                        # Entry point FastAPI
-│   ├── requirements.txt               # Dependencies Python
-│   ├── routers/
-│   │   └── predict.py                 # POST /predict endpoint
-│   ├── schemas/
-│   │   └── predict.py                 # Pydantic input/output schemas
-│   ├── services/
-│   │   └── inference.py               # Business logic prediksi
-│   ├── models/
-│   │   ├── base_model.py              # Abstract base class semua model
-│   │   ├── dkt_model.py               # Model loader & inference operasional
-│   │   └── architectures/             # Definisi arsitektur model
-│   │       ├── __init__.py
-│   │       ├── dkt_plus.py            # DKT+
-│   │       ├── sakt.py                # SAKT
-│   │       ├── simple_kt.py           # simpleKT
-│   │       └── saint.py               # SAINT
-│   └── saved_model/                   # Hasil training (tidak masuk Git)
-│
-├── notebooks/                         # Eksperimen & training (tidak di-deploy)
-│   ├── 01_eda.ipynb                   # Eksplorasi data
-│   ├── 02_preprocessing.ipynb         # Preprocessing data
-│   ├── 03_dkt_plus.ipynb              # Training DKT+
-│   ├── 04_sakt.ipynb                  # Training SAKT
-│   ├── 05_simple_kt.ipynb             # Training simpleKT
-│   ├── 06_saint.ipynb                 # Training SAINT
-│   └── dummy_data.py                  # Script generate dummy data
-│
+├── ai-service/                                        # FastAPI inference service (deployable)
+│   ├── Dockerfile                                     # Image build untuk deployment
+│   ├── inference_api.py                               # Entry point FastAPI + pipeline inference
+│   ├── top_category.json                              # Mapping 6 top category + skill indices
+│   ├── final/                                         # Artifak model untuk inference
+│   │   ├── causal_cross_transformer_dkt_model_train/
+│   │   │   ├── causal_cross_transformer_dkt_model.keras
+│   │   │   └── vocab.json
+│   │   └── lstm_dkt_model_train/
+│   │       ├── lstm_dkt_model.keras
+│   │       └── vocab.json
+│   └── README.md                                      # Dokumentasi endpoint & pipeline inference
+├── notebooks/                                         # Eksperimen & training (tidak di-deploy)
+│   ├── causal_cross_transformer_dkt_model_train/
+│   │   ├── causal_cross_transformer_dkt_model_train.ipynb
+│   │   ├── requirements.txt
+│   │   ├── vocab.json
+│   │   ├── assets/
+│   │   └── logs/
+│   │       ├── train/
+│   │       └── val/
+│   └── lstm_dkt_model_train/
+│       ├── lstm_dkt_model_train.ipynb
+│       ├── requirements.txt
+│       ├── vocab.json
+│       ├── assets/
+│       └── logs/
+│           ├── train/
+│           └── val/
 ├── data/
-│   ├── raw/                           # Data mentah (tidak masuk Git)
-│   └── processed/                     # Data hasil preprocessing (tidak masuk Git)
-│
-├── .gitignore
+│   ├── raw/                                           # Data mentah (placeholder .gitkeep)
+│   └── processed/                                     # Data hasil preprocessing (placeholder .gitkeep)
+├── pyproject.toml                                     # Dependencies (FastAPI, Uvicorn, Pydantic, dsb.)
+├── uv.lock
 └── README.md
 ```
 
-> ⚠️ Folder `saved_model/`, `data/raw/`, dan `data/processed/` tidak masuk Git karena ukurannya besar. File-file tersebut disimpan di Google Drive tim.
+> ⚠️ Folder `data/raw/` dan `data/processed/` biasanya tidak di-commit (hanya `.gitkeep`). Artifak model inference ada di `ai-service/final/`.
 
 ---
 
-### ⚙️ Setup & Cara Menjalankan
+### ⚙️ Setup & Cara Menjalankan (Local)
 
 #### Prasyarat
 - Python 3.10+
-- Conda (direkomendasikan)
+- (Opsional) `uv` untuk install dependency dari `pyproject.toml`
+- (Opsional) Gemini API key jika ingin hint personalisasi
 
-#### 1. Clone repositori
+#### 1. Install dependencies
+
+Opsi A (disarankan jika memakai `uv`):
 ```bash
-git clone https://github.com/11erlangga/edupredictmath-ai.git
-cd edupredictmath-ai
+uv sync
 ```
 
-#### 2. Buat dan aktifkan environment Conda
+Opsi B (pip):
 ```bash
-conda create -n edupredictmath python=3.10
-conda activate edupredictmath
+pip install -e .
 ```
 
-#### 3. Install dependencies
+#### 2. Set environment variable (opsional)
+
+Jika ingin hint Gemini aktif, set `GEMINI_API_KEY`:
+```bash
+setx GEMINI_API_KEY "YOUR_KEY"
+```
+
+#### 3. Jalankan API
+
 ```bash
 cd ai-service
-pip install -r requirements.txt
-```
-
-#### 4. Jalankan API
-```bash
-uvicorn main:app --reload
+uvicorn inference_api:app --reload --host 0.0.0.0 --port 8000
 ```
 
 API akan berjalan di `http://localhost:8000`.
@@ -91,23 +100,9 @@ Dokumentasi otomatis tersedia di `http://localhost:8000/docs`.
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
-| GET | `/` | Health check |
-| POST | `/predict` | Prediksi penguasaan konsep siswa |
+| POST | `/predict` | Prediksi penguasaan konsep siswa + hint opsional |
 
-#### Contoh Request `/predict`
-```json
-{
-  "user_id": "student_001",
-  "preferences": {
-    "interest": "algebra"
-  },
-  "history": [
-    { "concept_id": 1, "correctness": 1 },
-    { "concept_id": 2, "correctness": 0 }
-  ],
-  "query_concept": 3
-}
-```
+Detail schema request/response, aturan trigger Gemini, dan contoh payload lengkap ada di `ai-service/README.md`.
 
 ---
 
@@ -126,117 +121,112 @@ git checkout -b feat/nama-fitur
 
 ### 📌 Catatan Penting
 
-- File `.env` **jangan pernah di-push** ke GitHub. Simpan API key dan secret di file `.env` lokal atau di Railway Environment Variables
-- Hasil training model disimpan di **Google Drive tim**, bukan di repo ini
-- Notebook training dijalankan di **Google Colab**
+- File `.env` jangan pernah di-push ke GitHub
+- Model yang dipakai dapat di-switch di `ai-service/inference_api.py` melalui konstanta `MODEL_TYPE` (`LSTM` atau `Transformer`)
+- Konfigurasi container (port 7860, dll.) ada di `ai-service/Dockerfile`
 
 ---
 ---
 
 ## English Version
 
-This repository contains the **AI Service** of the EduPredictMath project — the component responsible for predicting students' math concept mastery using Knowledge Tracing models.
+This repository contains the **AI Service** of the EduPredictMath project — the component responsible for predicting students' math concept mastery using Knowledge Tracing.
+
+The main service is in `ai-service/` and exposes **POST** `/predict` to:
+- run DKT inference (LSTM or Causal Cross-Transformer),
+- aggregate mastery into 6 top math categories,
+- (optionally) trigger a personalized Indonesian step-by-step hint via Google Gemini when a student is detected as “struggling”.
 
 ### 📁 Repository Structure
 
-```
+```text
 edupredictmath-ai/
-├── ai-service/                        # API deployed to Railway
-│   ├── main.py                        # FastAPI entry point
-│   ├── requirements.txt               # Python dependencies
-│   ├── routers/
-│   │   └── predict.py                 # POST /predict endpoint
-│   ├── schemas/
-│   │   └── predict.py                 # Pydantic input/output schemas
-│   ├── services/
-│   │   └── inference.py               # Prediction business logic
-│   ├── models/
-│   │   ├── base_model.py              # Abstract base class for all models
-│   │   ├── dkt_model.py               # Model loader & operational inference
-│   │   └── architectures/             # Model architecture definitions
-│   │       ├── __init__.py
-│   │       ├── dkt_plus.py            # DKT+
-│   │       ├── sakt.py                # SAKT
-│   │       ├── simple_kt.py           # simpleKT
-│   │       └── saint.py               # SAINT
-│   └── saved_model/                   # Trained model artifacts (not in Git)
-│
-├── notebooks/                         # Experiments & training (not deployed)
-│   ├── 01_eda.ipynb                   # Exploratory data analysis
-│   ├── 02_preprocessing.ipynb         # Data preprocessing
-│   ├── 03_dkt_plus.ipynb              # DKT+ training
-│   ├── 04_sakt.ipynb                  # SAKT training
-│   ├── 05_simple_kt.ipynb             # simpleKT training
-│   ├── 06_saint.ipynb                 # SAINT training
-│   └── dummy_data.py                  # Dummy data generation script
-│
+├── ai-service/                                        # FastAPI inference service (deployable)
+│   ├── Dockerfile                                     # Image build for deployment
+│   ├── inference_api.py                               # FastAPI entry point + inference pipeline
+│   ├── top_category.json                              # 6 top categories + skill indices
+│   ├── final/                                         # Inference model artifacts
+│   │   ├── causal_cross_transformer_dkt_model_train/
+│   │   │   ├── causal_cross_transformer_dkt_model.keras
+│   │   │   └── vocab.json
+│   │   └── lstm_dkt_model_train/
+│   │       ├── lstm_dkt_model.keras
+│   │       └── vocab.json
+│   └── README.md                                      # Detailed endpoint & pipeline docs
+├── notebooks/                                         # Experiments & training (not deployed)
+│   ├── causal_cross_transformer_dkt_model_train/
+│   │   ├── causal_cross_transformer_dkt_model_train.ipynb
+│   │   ├── requirements.txt
+│   │   ├── vocab.json
+│   │   ├── assets/
+│   │   └── logs/
+│   │       ├── train/
+│   │       └── val/
+│   └── lstm_dkt_model_train/
+│       ├── lstm_dkt_model_train.ipynb
+│       ├── requirements.txt
+│       ├── vocab.json
+│       ├── assets/
+│       └── logs/
+│           ├── train/
+│           └── val/
 ├── data/
-│   ├── raw/                           # Raw data (not in Git)
-│   └── processed/                     # Preprocessed data (not in Git)
-│
-├── .gitignore
+│   ├── raw/                                           # Raw data (placeholder .gitkeep)
+│   └── processed/                                     # Processed data (placeholder .gitkeep)
+├── pyproject.toml                                     # Dependencies (FastAPI, Uvicorn, Pydantic, etc.)
+├── uv.lock
 └── README.md
 ```
 
-> ⚠️ The `saved_model/`, `data/raw/`, and `data/processed/` folders are excluded from Git due to large file sizes. These are stored in the team's Google Drive.
+> ⚠️ `data/raw/` and `data/processed/` are typically not committed (only `.gitkeep`). Inference model artifacts are located in `ai-service/final/`.
 
 ---
 
-### ⚙️ Setup & How to Run
+### ⚙️ Setup & How to Run (Local)
 
 #### Prerequisites
 - Python 3.10+
-- Conda (recommended)
+- (Optional) `uv` to install dependencies from `pyproject.toml`
+- (Optional) Gemini API key if you want personalized hints
 
-#### 1. Clone the repository
+#### 1. Install dependencies
+
+Option A (recommended if you use `uv`):
 ```bash
-git clone https://github.com/11erlangga/edupredictmath-ai.git
-cd edupredictmath-ai
+uv sync
 ```
 
-#### 2. Create and activate Conda environment
+Option B (pip):
 ```bash
-conda create -n edupredictmath python=3.10
-conda activate edupredictmath
+pip install -e .
 ```
 
-#### 3. Install dependencies
+#### 2. Set environment variable (optional)
+
+To enable Gemini hints, set `GEMINI_API_KEY`:
+```bash
+setx GEMINI_API_KEY "YOUR_KEY"
+```
+
+#### 3. Run the API
+
 ```bash
 cd ai-service
-pip install -r requirements.txt
-```
-
-#### 4. Run the API
-```bash
-uvicorn main:app --reload
+uvicorn inference_api:app --reload --host 0.0.0.0 --port 8000
 ```
 
 The API will run at `http://localhost:8000`.
-Auto-generated documentation is available at `http://localhost:8000/docs`.
+Auto-generated docs are available at `http://localhost:8000/docs`.
 
 ---
 
-### 🔗 Endpoints
+### 🔗 Endpoint
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/` | Health check |
-| POST | `/predict` | Predict student concept mastery |
+| POST | `/predict` | Predict mastery + optional hint |
 
-#### Example `/predict` Request
-```json
-{
-  "user_id": "student_001",
-  "preferences": {
-    "interest": "algebra"
-  },
-  "history": [
-    { "concept_id": 1, "correctness": 1 },
-    { "concept_id": 2, "correctness": 0 }
-  ],
-  "query_concept": 3
-}
-```
+For the full request/response schema, Gemini trigger rules, and complete payload examples, see `ai-service/README.md`.
 
 ---
 
@@ -255,6 +245,6 @@ git checkout -b feat/feature-name
 
 ### 📌 Important Notes
 
-- **Never push** the `.env` file to GitHub. Store API keys and secrets in your local `.env` file or in Railway Environment Variables
-- Trained model artifacts are stored in the **team's Google Drive**, not in this repository
-- Training notebooks are run on **Google Colab**
+- Never commit `.env`
+- The model can be switched in `ai-service/inference_api.py` via the `MODEL_TYPE` constant (`LSTM` or `Transformer`)
+- Container settings (port 7860, etc.) are defined in `ai-service/Dockerfile`
